@@ -1,0 +1,63 @@
+
+Changelog for VSO
+
+TODO: Enums.
+
+2011-12-09      v0.012
+  - Updated the way we deal with subtypes.
+  - 'HashRef[Foo]' is translated -> 'HashRef::of::Foo' and isa HashRef,
+    same goes for ArrayRef[Foo] -> ArrayRef::of::Foo
+  - Basic benchmark shows major speed improvement over v0.011.
+
+2011-12-04      v0.011
+  - Almost a total rewrite.
+  - Type-checking was overhauled.
+  - Major speed degredation.
+
+2011-12-03      v0.010
+  - Type-checking is still a work-in-progress.  Another rewrite might just do it.
+  - Updated description in POD to not be snarky.
+
+2011-12-02      v0.009
+  - Type-checking was re-written.
+  - Subtypes are implemented "correctly".
+  - The full* Moose type-hierarchy is implemented.
+    * excluding RoleName and Maybe[`a]
+  - Added test for leaking memory.
+
+2011-11-30      v0.008
+  - wantarray is correctly preserved for before/after wrapped subs.
+
+2011-11-30      v0.007
+  - Now 'before' and 'after' can be used on subs as well as attributes.
+
+2011-11-29      v0.006
+  - Added subtypes.
+
+2011-11-29      v0.005
+  - Fixed some minor issues with validating new values for object fields.
+
+2011-11-28      v0.004
+  - Updated SYNOPSIS in POD.
+  - Added 'where' checking.
+  - For 'where', $_ is localized to the yet-to-be-validated value and $_[0] is the
+    object to which the attribute (which is validating the value) belongs.
+  - Several tweaks here and there.
+
+2011-11-19      v0.003
+  - Value type-checking on constructor now works.
+  - 'before' and 'after' attribute modifiers now work.
+  - Not yet as fast as I want it to be.
+  - Type-checking now works for things like:
+    isa => 'ArrayRef[My::Thing]'
+    - and -
+    isa => 'HashRef[My::Thing]'
+  - Type-checking slows things down...a lot.
+
+2011-11-17      v0.002
+  - Fixed recursive depency issue.
+
+2011-11-17      v0.001
+  - Initial release.
+  - God help us.
+
