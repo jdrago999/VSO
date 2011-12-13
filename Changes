@@ -1,6 +1,9 @@
 
 Changelog for VSO
 
+2011-12-14      v0.019
+  - Fixed errant pod.
+
 2011-12-13      v0.018
   - Fixed odd/even test, updated pod.
 

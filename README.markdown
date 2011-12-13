@@ -4,9 +4,9 @@ VSO - Very Simple Objects
 
 # SYNOPSIS
 
-    package Plane;
-    
+Basic point example:
 
+    package Plane;
     use VSO;
     
 
@@ -31,15 +31,13 @@ VSO - Very Simple Objects
 
 
     package Point2d;
-    
-
     use VSO;
     
 
-    subtype 'ValidValue' =>
-      as      'Int',
-      where   { $_ >= 0 && $_ <= shift->plane->width },
-      message { 'Value must be between zero and ' . shift->plane->width };
+    subtype 'ValidValue'
+      => as      'Int',
+      => where   { $_ >= 0 && $_ <= shift->plane->width },
+      => message { 'Value must be between zero and ' . shift->plane->width };
     
 
     has 'plane' => (
@@ -71,11 +69,10 @@ VSO - Very Simple Objects
       my ($s, $new_value, $old_value) = @_;
       warn "Moving $s from y$old_value to y$new_value";
     };
-    
+
+Fancy 3D Point:
 
     package Point3d;
-    
-
     use VSO;
     
 
@@ -98,6 +95,58 @@ VSO - Very Simple Objects
     after 'greet' => sub {
       warn "I have greeted you";
     };
+
+
+
+Enums:
+
+    package Foo;
+    use VSO;
+
+    enum 'DayOfWeek' => [qw( Sun Mon Tue Wed Thu Fri Sat )];
+
+    has 'day' => (
+      is        => 'ro',
+      isa       => 'DayOfWeek',
+      required  => 1,
+    );
+
+Coercions and Subtypes:
+
+    package Ken;
+    use VSO;
+
+    subtype 'Number::Odd'
+      => as 'Int'
+      => where { $_ % 2 }
+      => message { "$_ is not an odd number: %=:" . ($_ % 2) };
+
+    subtype 'Number::Even'
+      => as 'Int'
+      => where { (! $_) || ( $_ % 2 == 0 ) }
+      => message { "$_ is not an even number" };
+
+    coerce 'Number::Odd'
+      => from 'Int'
+      => via  { $_ % 2 ? $_ : $_ + 1 };
+
+    coerce 'Number::Even'
+      => from 'Int'
+      => via { $_ % 2 ? $_ + 1 : $_ };
+
+    has 'favorite_number' => (
+      is        => 'ro',
+      isa       => 'Number::Odd',
+      required  => 1,
+      coerce    => 1, # Otherwise no coercion is performed.
+    );
+
+    ...
+
+    my $ken = Ken->new( favorite_number => 3 ); # Works
+    my $ken = Ken->new( favorite_number => 6 ); # Works, because of coercion.
+
+
 
 # DESCRIPTION
 
@@ -135,6 +184,8 @@ Missing from the Moose type system are:
 - Maybe[`a]
 
 If it's a 'Maybe[whatever]', just do `required => 0`
+
+_*This might change..._
 
 - RoleName
 
