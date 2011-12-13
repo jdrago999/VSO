@@ -1,7 +1,19 @@
 
 Changelog for VSO
 
-TODO: Enums.
+2011-12-13      v0.016
+  - Added named enum support.
+  - enum 'DayOfWeek' => [qw( Sun Mon Tue Wed Thu Fri Sat )];
+
+2011-12-11      v0.015
+  - The default value was not being properly initialized for new objects.
+
+2011-12-11      v0.014
+  - Fixed 'resources' part of META.yml
+
+2011-12-10      v0.013
+  - Moved development to github
+  - Updated META.yml
 
 2011-12-09      v0.012
   - Updated the way we deal with subtypes.

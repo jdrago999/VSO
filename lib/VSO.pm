@@ -9,7 +9,7 @@ use Data::Dumper;
 use base 'Exporter';
 use VSO::Subtype;
 
-our $VERSION = '0.012';
+our $VERSION = '0.017';
 
 our @EXPORT = qw(
   has
@@ -19,6 +19,7 @@ our @EXPORT = qw(
   
   subtype as where message
   coerce from via
+  enum
 );
 
 my $_meta       = { };
@@ -99,6 +100,10 @@ sub _build_arg
     {
       # Deal with this later.
       return;
+    }
+    else
+    {
+      return $s->{$name} = $value = $props->{default}->( $s );
     }# end if()
   }# end if()
   
@@ -125,10 +130,7 @@ sub _validate_field
   {
     if( ! defined($new_value) )
     {
-      if( $props->{default} )
-      {
-        return $props->{default}->();
-      }# end if()
+      # Nothing?
     }# end if()
     my $is_ok = 0;
     ISA: foreach my $isa ( split /\|/, $props->{isa} )
@@ -507,6 +509,27 @@ sub from    { from => shift, @_ }
 sub via(&)  { via  => $_[0]     }
 
 
+sub enum($$)
+{
+  my ($name, $vals) = @_;
+  _add_subtype(
+    name    => $name,
+    as      => 'Str',
+    where   => sub {
+      my $val = $_;
+      no warnings 'uninitialized';
+      for( @$vals ) {
+        return 1 if $_ eq $val;
+      }
+      return 0;
+    },
+    message => sub {
+      "Must be a valid '$name'"
+    }
+  );
+}# end enum($$)
+
+
 # All things spring forth from the formless void:
 
 subtype 'Any' =>
@@ -616,8 +639,9 @@ VSO - Very Simple Objects
 
 =head1 SYNOPSIS
 
+Basic point example:
+
   package Plane;
-  
   use VSO;
   
   has 'width' => (
@@ -638,13 +662,12 @@ VSO - Very Simple Objects
 
 
   package Point2d;
-  
   use VSO;
   
-  subtype 'ValidValue' =>
-    as      'Int',
-    where   { $_ >= 0 && $_ <= shift->plane->width },
-    message { 'Value must be between zero and ' . shift->plane->width };
+  subtype 'ValidValue'
+    => as      'Int',
+    => where   { $_ >= 0 && $_ <= shift->plane->width },
+    => message { 'Value must be between zero and ' . shift->plane->width };
   
   has 'plane' => (
     is        => 'ro',
@@ -671,9 +694,10 @@ VSO - Very Simple Objects
     my ($s, $new_value, $old_value) = @_;
     warn "Moving $s from y$old_value to y$new_value";
   };
-  
+
+Fancy 3D Point:
+
   package Point3d;
-  
   use VSO;
   
   extends 'Point2d';
@@ -692,6 +716,56 @@ VSO - Very Simple Objects
   after 'greet' => sub {
     warn "I have greeted you";
   };
+
+
+Enums:
+
+  package Foo;
+  use VSO;
+
+  enum 'DayOfWeek' => [qw( Sun Mon Tue Wed Thu Fri Sat )];
+
+  has 'day' => (
+    is        => 'ro',
+    isa       => 'DayOfWeek',
+    required  => 1,
+  );
+
+Coercions and Subtypes:
+
+  package Ken;
+  use VSO;
+
+  subtype 'Number::Odd'
+    => as 'Int'
+    => where { $_ % 2 }
+    => message { "$_ is not an odd number: %=:" . ($_ % 2) };
+
+  subtype 'Number::Even'
+    => as 'Int'
+    => where { (! $_) || ( $_ % 2 == 0 ) }
+    => message { "$_ is not an even number" };
+
+  coerce 'Number::Odd'
+    => from 'Int'
+    => via  { $_++ };
+
+  coerce 'Number::Even'
+    => from 'Int'
+    => via { $_++ };
+
+  has 'favorite_number' => (
+    is        => 'ro',
+    isa       => 'Number::Odd',
+    required  => 1,
+    coerce    => 1, # Otherwise no coercion is performed.
+  );
+
+  ...
+
+  my $ken = Ken->new( favorite_number => 3 ); # Works
+  my $ken = Ken->new( favorite_number => 6 ); # Works, because of coercion.
+
 
 =head1 DESCRIPTION
 
@@ -731,6 +805,8 @@ Missing from the Moose type system are:
 =item Maybe[`a]
 
 If it's a 'Maybe[whatever]', just do C<< required => 0 >>
+
+I<*This might change...>
 
 =item RoleName
 

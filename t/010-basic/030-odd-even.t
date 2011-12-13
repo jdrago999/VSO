@@ -1,26 +1,31 @@
-#!/usr/bin/perl -w
+#!/user/bin/perl -w
 
-package Digits;
-
+package Ken;
 use VSO;
 
-subtype 'EvenNumber'  =>
-  as      'Int',
-  where   { $_ % 2 == 0 };
+subtype 'Number::Odd'
+  => as 'Int'
+  => where { $_ % 2 }
+  => message { "$_ is not an odd number: %=:" . ($_ % 2) };
 
-subtype 'OddNumber' =>
-  as      'Int',
-  where   { $_ % 2 > 0 };
+subtype 'Number::Even'
+  => as 'Int'
+  => where { (! $_) || ( $_ % 2 == 0 ) }
+  => message { "$_ is not an even number" };
 
-#coerce 'EvenNumber' =>
-#  from    'OddNumber',
-#  via     { $_ + 1 };
+coerce 'Number::Odd'
+  => from 'Int'
+  => via  { $_++ };
 
-has 'Numbers' => (
+coerce 'Number::Even'
+  => from 'Int'
+  => via { $_++ };
+
+has 'favorite_number' => (
   is        => 'ro',
-  isa       => 'ArrayRef[EvenNumber]',
+  isa       => 'Number::Odd',
   required  => 1,
-  coerce    => 1
+  coerce    => 1, # Otherwise no coercion is performed.
 );
 
 package main;
@@ -29,21 +34,17 @@ use strict;
 use warnings 'all';
 use Test::More 'no_plan';
 
-ok(1);
-exit;
-
-
-my $d = Digits->new(
-  Numbers => [ 2, 4, 6, 8, 10 ]
-);
-
-ok( $d );
-
-#eval {
-  $d = Digits->new(
-    Numbers => [ 1, 3, 5, 7, 9, 'a' ]
+GOOD: {
+  ok(
+    my $ken = Ken->new( favorite_number => 3 ),
+    'Ken.new(3)'
   );
-#};
-ok( $d );
+}
 
+EVEN2ODD: {
+  ok(
+    my $ken = Ken->new( favorite_number => 4 ),
+    'Ken.new(4)'
+  );
+}
 

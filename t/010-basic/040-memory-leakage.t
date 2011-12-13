@@ -9,7 +9,16 @@ package main;
 use strict;
 use warnings 'all';
 use Test::More 'no_plan';
-use Test::Memory::Cycle;
+eval {
+  require Test::Memory::Cycle;
+  Test::Memory::Cycle->import;
+};
+if( $@ )
+{
+  warn "Test::Memory::Cycle required for these tests\n";
+  ok(1);
+  exit(0);
+}# end if()
 
 use lib 't/lib';
 use State;
