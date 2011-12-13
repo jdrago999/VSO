@@ -9,7 +9,7 @@ use Data::Dumper;
 use base 'Exporter';
 use VSO::Subtype;
 
-our $VERSION = '0.017';
+our $VERSION = '0.018';
 
 our @EXPORT = qw(
   has
@@ -748,11 +748,18 @@ Coercions and Subtypes:
 
   coerce 'Number::Odd'
     => from 'Int'
-    => via  { $_++ };
+    => via  { $_ % 2 ? $_ : $_ + 1 };
 
   coerce 'Number::Even'
     => from 'Int'
-    => via { $_++ };
+    => via { $_ % 2 ? $_ + 1 : $_ };
+
+  has 'favorite_number' => (
+    is        => 'ro',
+    isa       => 'Number::Odd',
+    required  => 1,
+    coerce    => 1, # Otherwise no coercion is performed.
+  );
 
   has 'favorite_number' => (
     is        => 'ro',

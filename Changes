@@ -1,6 +1,12 @@
 
 Changelog for VSO
 
+2011-12-13      v0.018
+  - Fixed odd/even test, updated pod.
+
+2011-12-13      v0.017
+  - Updated POD and added odd/even test.
+
 2011-12-13      v0.016
   - Added named enum support.
   - enum 'DayOfWeek' => [qw( Sun Mon Tue Wed Thu Fri Sat )];

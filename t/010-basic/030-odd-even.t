@@ -15,11 +15,11 @@ subtype 'Number::Even'
 
 coerce 'Number::Odd'
   => from 'Int'
-  => via  { $_++ };
+  => via  { $_ % 2 ? $_ : $_ + 1 };
 
 coerce 'Number::Even'
   => from 'Int'
-  => via { $_++ };
+  => via { $_ % 2 ? $_ + 1 : $_ };
 
 has 'favorite_number' => (
   is        => 'ro',
@@ -39,6 +39,7 @@ GOOD: {
     my $ken = Ken->new( favorite_number => 3 ),
     'Ken.new(3)'
   );
+  is $ken->favorite_number => 3;
 }
 
 EVEN2ODD: {
@@ -46,5 +47,6 @@ EVEN2ODD: {
     my $ken = Ken->new( favorite_number => 4 ),
     'Ken.new(4)'
   );
+  is $ken->favorite_number => 5;
 }
 
