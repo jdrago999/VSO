@@ -35,8 +35,8 @@ Basic point example:
     
 
     subtype 'ValidValue'
-      => as      'Int',
-      => where   { $_ >= 0 && $_ <= shift->plane->width },
+      => as      'Int'
+      => where   { $_ >= 0 && $_ <= shift->plane->width }
       => message { 'Value must be between zero and ' . shift->plane->width };
     
 
@@ -163,6 +163,7 @@ VSO offers the following type system:
       Item
           Bool
           Undef
+          Maybe[`a]*
           Defined
               Value
                   Str
@@ -179,17 +180,17 @@ VSO offers the following type system:
                       FileHandle
                   Object
 
-Missing from the Moose type system are:
+Differences from the Moose type system include:
 
-- Maybe[`a]
+- Maybe[`a] (Different)
 
-If it's a 'Maybe[whatever]', just do `required => 0`
+VSO converts `Maybe[Foo]` to `Undef|Foo` and converts `Maybe[HashRef[Foo]]` to `Undef|HashRef[Foo]`.
 
-_*This might change..._
-
-- RoleName
+- RoleName (Missing)
 
 VSO does not currently support 'roles'.
+
+_(This may change)_.
 
 # AUTHOR
 
