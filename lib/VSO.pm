@@ -9,7 +9,7 @@ use Data::Dumper;
 use base 'Exporter';
 use VSO::Subtype;
 
-our $VERSION = '0.019';
+our $VERSION = '0.021';
 
 our @EXPORT = qw(
   has
@@ -23,7 +23,6 @@ our @EXPORT = qw(
 );
 
 my $_meta       = { };
-my $_subtypes   = { };
 my $_coercions  = { };
 
 sub import
@@ -126,55 +125,26 @@ sub _validate_field
   
   my $original_type = VSO::Subtype->find(_discover_type( $new_value ));
   my $original_value = $new_value;
-  if( $props->{isa} && $props->{required} )
+  
+  my $is_ok = 0;
+  ISA: foreach my $isa ( split /\|/, $props->{isa} )
   {
-    if( ! defined($new_value) )
-    {
-      # Nothing?
-    }# end if()
-    my $is_ok = 0;
-    ISA: foreach my $isa ( split /\|/, $props->{isa} )
-    {
-      $isa =~ s{^(.+?)\[(.+?)\]}{"$1" . "::of::$2"}e
-        if $isa =~ m{^.+?\[.+?\]$};
-      TYPE_CHECK: {
-        my $current_type = VSO::Subtype->find(_discover_type( $new_value ));
-        my $wanted_type = VSO::Subtype->find($isa);
+    $isa = "$1\::of::$2" if $isa =~ m{^(.+?)\[(.+?)\]};
+    TYPE_CHECK: {
+      my $current_type = VSO::Subtype->find(_discover_type( $new_value ));
+      my $wanted_type = VSO::Subtype->find($isa);
+    
+      # Don't worry about Undef when the field isn't required:
+      if( $current_type eq 'Undef' && ! $props->{required} )
+      {
+        $is_ok = 1;
+        last ISA;
+      }# end if()
 
-        # Verify that the value matches the entire chain of dependencies:
-        if( $current_type->isa( $wanted_type ) || $current_type eq $wanted_type )
-        {
-          if( my $ref = $wanted_type->can('where') )
-          {
-            local $_ = $new_value;
-            if( $wanted_type->where( $s ) )
-            {
-              $is_ok = 1;
-              last ISA;
-            }# end if()
-          }
-          else
-          {
-            $is_ok = 1;
-            last ISA;
-          }# end if()
-        }
-        elsif( my $can_coerce = $props->{coerce} && exists($_coercions->{ $wanted_type }->{ $current_type }) )
-        {
-          # Can we coerce from this type to the wanted type?:
-          my $coercion = $can_coerce ? $_coercions->{ $wanted_type }->{ "$current_type" } : undef;
-          local $_ = $new_value;
-          if( $coercion )
-          {
-            $new_value = $coercion->( $s );
-            $is_ok = 1;
-          }
-          else
-          {
-            next TYPE_CHECK;
-          }# end if()
-        }
-        elsif( eval { $wanted_type->as eq $current_type } )
+      # Verify that the value matches the entire chain of dependencies:
+      if( $current_type->isa( $wanted_type ) || $current_type eq $wanted_type )
+      {
+        if( my $ref = $wanted_type->can('where') )
         {
           local $_ = $new_value;
           if( $wanted_type->where( $s ) )
@@ -182,18 +152,47 @@ sub _validate_field
             $is_ok = 1;
             last ISA;
           }# end if()
+        }
+        else
+        {
+          $is_ok = 1;
+          last ISA;
         }# end if()
+      }
+      elsif( my $can_coerce = $props->{coerce} && exists($_coercions->{ $wanted_type }->{ $current_type }) )
+      {
+        # Can we coerce from this type to the wanted type?:
+        my $coercion = $can_coerce ? $_coercions->{ $wanted_type }->{ "$current_type" } : undef;
+        local $_ = $new_value;
+        if( $coercion )
+        {
+          $new_value = $coercion->( $s );
+          $is_ok = 1;
+        }
+        else
+        {
+          next TYPE_CHECK;
+        }# end if()
+      }
+      elsif( eval { $wanted_type->as eq $current_type } )
+      {
+        local $_ = $new_value;
+        if( $wanted_type->where( $s ) )
+        {
+          $is_ok = 1;
+          last ISA;
+        }# end if()
+      }# end if()
 
-      };
-      next ISA;
-    }# end foreach()
-    
-    unless( $is_ok )
-    {
-      local $_ = $original_value;
-      croak "Invalid value for @{[ref($s)]}.$name: isn't a $props->{isa}: [$original_type] '$_'" . (eval{ ': ' . VSO::Subtype->find($props->{isa})->message($s) }||'');
-    }# end unless()
-  }# end if()
+    };
+    next ISA;
+  }# end foreach()
+  
+  unless( $is_ok )
+  {
+    local $_ = $original_value;
+    croak "Invalid value for @{[ref($s)]}.$name: isn't a $props->{isa}: [$original_type] '$_'" . (eval{ ': ' . VSO::Subtype->find($props->{isa})->message($s) }||'');
+  }# end unless()
   
   return $new_value;
 }# end _validate_field()
@@ -285,31 +284,19 @@ sub has($;@)
   my %properties = @_;
   my $meta = $class->meta;
   
-  foreach my $type ( split /\|/, ($properties{isa}||'') )
+  $properties{isa} ||= 'Any';
+  $properties{isa} =~ s{^Maybe\[(.*?)\]$}{Undef|$1}s;
+
+  foreach my $type ( split /\|/, $properties{isa} )
   {
-    
     if( my ($reftype, $valtype) = $type =~ m{^((?:Hash|Array)Ref)\[(.+?)\]$} )
     {
-      load_class($type)
-        unless VSO::Subtype->find($type);
+      load_class($valtype)
+        unless VSO::Subtype->find($valtype);
+      (my $classname = $type) =~ s{^(.+?)\[(.+?)\]}{$1 . "::of::$2"}e;
       unless( VSO::Subtype->subtype_exists($type) )
       {
-        _add_subtype(
-          'name'    => $type,
-          'as'      => $reftype,
-          'where'   =>
-            $reftype eq 'ArrayRef' ?
-              sub {
-                my $vals = $_;
-                ! grep {! ( _discover_type($_)->isa($valtype) || VSO::Subtype->find(_discover_type($_))->isa($valtype) ) } @$vals
-              }
-              :
-              sub {
-                my $vals = [ values %$_ ];
-                ! grep { ! ( _discover_type($_)->isa($valtype) || VSO::Subtype->find(_discover_type($_))->isa($valtype) ) } @$vals
-              },
-          'message' => sub { "Must be a valid '$type'" },
-        );
+        _add_collection_subtype( $type, $reftype, $valtype );
       }# end unless()
     }
     else
@@ -322,7 +309,7 @@ sub has($;@)
   my $props = $meta->{fields}->{$name} = {
     is        => 'rw',
     required  => 1,
-    isa       => undef,
+    isa       => 'Any',
     lazy      => 0,
     weak_ref  => 0,
     coerce    => 0,
@@ -394,12 +381,27 @@ sub has($;@)
 }# end has()
 
 
-sub _parse_isa
+sub _add_collection_subtype
 {
-  my $isa = shift;
+  my ($type, $reftype, $valtype) = @_;
   
-  return split /\|/, $isa;
-}# end _parse_isa()
+  _add_subtype(
+    'name'    => $type,
+    'as'      => $reftype,
+    'where'   =>
+      $reftype eq 'ArrayRef' ?
+        sub {
+          my $vals = $_;
+          ! grep {my $itemtype = _discover_type($_); ! ( $itemtype->isa($valtype) ) } @$vals
+        }
+        :
+        sub {
+          my $vals = [ values %$_ ];
+          ! grep {my $itemtype = _discover_type($_); ! ( $itemtype->isa($valtype) ) } @$vals
+        },
+    'message' => sub { "Must be a valid '$type'" },
+  );
+}# end _add_collection_subtype()
 
 
 sub _discover_type
@@ -444,7 +446,7 @@ sub _new_meta
 sub load_class
 {
   my $class = shift;
-
+  
   (my $file = "$class.pm") =~ s|::|/|g;
   no strict 'refs';
   eval { require $file unless defined(@{"$class\::ISA"}) || $INC{$file}; 1 }
@@ -458,23 +460,26 @@ sub _add_subtype
 {
   my %args = @_;
 
+  $args{name} =~ s{^(.+?)\[(.+?)\]}{"$1" . "::of::$2"}e
+    if $args{name} =~ m{^.+?\[.+?\]$};
+
+  return if $VSO::Subtype::types{$args{name}};
+  
   $args{as} ||= '';
   $args{as} =~ s{^(.+?)\[(.+?)\]}{"$1" . "::of::$2"}e
     if $args{as} =~ m{^.+?\[.+?\]$};
-  $args{name} =~ s{^(.+?)\[(.+?)\]}{"$1" . "::of::$2"}e
-    if $args{name} =~ m{^.+?\[.+?\]$};
-  eval <<"PKG";
-package $args{name}; {
-  our \@ISA = qw( VSO::Subtype $args{as} );
-  sub name  { '$args{name}' }
-  sub as    { '$args{as}'   }
-  sub where;
-  sub message;
-}
-PKG
+  
+  my $name = $args{name};
   no strict 'refs';
-  *{"$args{name}::where"} = $args{where};
-  *{"$args{name}::message"} = $args{message};
+  
+  @{"$name\::ISA"} = (grep { $_ } 'VSO::Subtype', $args{as});
+  *{"$name\::name"} = sub{$name};
+  *{"$name\::as"} = sub{$args{as}};
+  *{"$name\::where"} = $args{where};
+  *{"$name\::message"} = $args{message};
+  (my $file = "$name.pm") =~ s|::|/|g;
+  $INC{$file} = $file;
+  $name->init();
 }# end _add_subtype()
 
 
@@ -483,7 +488,7 @@ sub subtype($;@)
   my ($name, %args) = @_;
   
   confess "Subtype '$name' already exists"
-    if exists($_subtypes->{$name});
+    if $VSO::Subtype::types{$name};
   _add_subtype(
     name    => $name,
     as      => $args{as},
@@ -564,12 +569,12 @@ subtype 'Any' =>
 
           subtype 'Num' =>
             as      'Str',
-            where   { m{^\d+\.?\d*?$} },
+            where   { m{^[\+\-]?\d+\.?\d*?$} },
             message { 'Must contain only numbers and decimals' };
 
             subtype 'Int' =>
               as      'Num',
-              where   { m{^\d+$} },
+              where   { m{^[\+\-]?\d+$} },
               message { 'Must contain only numbers 0-9' };
 
               subtype 'Bool' =>
@@ -665,8 +670,8 @@ Basic point example:
   use VSO;
   
   subtype 'ValidValue'
-    => as      'Int',
-    => where   { $_ >= 0 && $_ <= shift->plane->width },
+    => as      'Int'
+    => where   { $_ >= 0 && $_ <= shift->plane->width }
     => message { 'Value must be between zero and ' . shift->plane->width };
   
   has 'plane' => (
@@ -782,6 +787,7 @@ VSO offers the following type system:
     Item
         Bool
         Undef
+        Maybe[`a]*
         Defined
             Value
                 Str
@@ -798,19 +804,19 @@ VSO offers the following type system:
                     FileHandle
                 Object
 
-Missing from the Moose type system are:
+Differences from the Moose type system include:
 
 =over 4
 
-=item Maybe[`a]
+=item Maybe[`a] (Different)
 
-If it's a 'Maybe[whatever]', just do C<< required => 0 >>
+VSO converts C<Maybe[Foo]> to C<Undef|Foo> and converts C<Maybe[HashRef[Foo]]> to C<Undef|HashRef[Foo]>.
 
-I<*This might change...>
-
-=item RoleName
+=item RoleName (Missing)
 
 VSO does not currently support 'roles'.
+
+I<(This may change)>.
 
 =back
 

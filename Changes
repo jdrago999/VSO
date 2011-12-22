@@ -1,6 +1,13 @@
 
 Changelog for VSO
 
+2011-12-21      v0.021
+  - Maybe[Foo] works.  Becomes Undef|Foo instead.
+  - Various minor internal fixes and tweaks around type-checking and validation.
+
+2011-12-20      v0.020
+  - Handling of (required => 0) works properly now.
+
 2011-12-14      v0.019
   - Fixed errant pod.
 

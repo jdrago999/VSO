@@ -27,7 +27,7 @@ my $results = timethese(100_000, {
   blessed_hashref => \&blessed_hashref,
   hashref         => \&hashref,
   vso             => \&vso,
-  moose           => \&moose,
+#  moose           => \&moose,
 #  mo              => \&mo,
 });
 
