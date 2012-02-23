@@ -1,5 +1,6 @@
 bench.pl
 Changes
+eg/family.pl
 inc/Module/Install.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
@@ -24,6 +25,7 @@ t/010-basic/050-more-examples.t
 t/010-basic/060-reftytpes.t
 t/010-basic/070-default-values.t
 t/010-basic/080-enum.t
+t/010-basic/090-non-vso.t
 t/lib/MooseState.pm
 t/lib/MoState.pm
 t/lib/State.pm

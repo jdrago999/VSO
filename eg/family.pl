@@ -448,7 +448,7 @@ our @people = ( );
 my ($mother, $father);
 my $twenty_years = 60 * 60 * 24 * 365 * 20;
 
-my $max = 5_000;
+my $max = 1000;
 for( 1..$max )
 {
   warn "$_/$max\n" if $_ % 1000 == 0;

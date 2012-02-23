@@ -3,13 +3,13 @@ package VSO;
 
 use strict;
 use warnings 'all';
-use Carp qw( confess croak );
+use Carp qw( confess  );
 use Scalar::Util qw( weaken openhandle );
 use Data::Dumper;
 use base 'Exporter';
 use VSO::Subtype;
 
-our $VERSION = '0.021';
+our $VERSION = '0.024';
 
 our @EXPORT = qw(
   has
@@ -31,6 +31,7 @@ sub import
   import warnings;
   $^H |= 1538;
   my $class = shift;
+  my %args = @_;
   my $caller = caller;
   return if $caller eq __PACKAGE__;
   no strict 'refs';
@@ -38,10 +39,15 @@ sub import
     *{"$caller\::$_"} = \&{$_}
   } @EXPORT;
   push @{"$caller\::ISA"}, $class if $class eq __PACKAGE__;
+  $args{extends} ||= [ ];
+  $args{extends} = [$args{extends}] if $args{extends} && ! ref($args{extends});
+  push @{"$caller\::ISA"}, grep { load_class($_); 1 } @{ $args{extends} };
   
   $_meta->{ $caller } ||= _new_meta();
   no warnings 'redefine';
   *{"$caller\::meta"} = sub { $_meta->{$caller} };
+  
+  _extend_class( $caller => @{$args{extends}} ) if @{$args{extends}};
 }# end import()
 
 
@@ -90,7 +96,7 @@ sub _build_arg
   # No value, no default and it's required:
   if( $props->{required} && (! defined($value) ) && (! $props->{default}) )
   {
-    croak "Required param '$name' is required but was not provided.";
+    confess "Required param '$name' is required but was not provided.";
   }
   # No value, but we have a default:
   elsif( $props->{default} && (! defined($value) ) )
@@ -131,18 +137,21 @@ sub _validate_field
   {
     $isa = "$1\::of::$2" if $isa =~ m{^(.+?)\[(.+?)\]};
     TYPE_CHECK: {
-      my $current_type = VSO::Subtype->find(_discover_type( $new_value ));
-      my $wanted_type = VSO::Subtype->find($isa);
-    
+      my $current_type = VSO::Subtype->find( _discover_type( $new_value ) );
+      my $wanted_type = VSO::Subtype->find( $isa );
+      
       # Don't worry about Undef when the field isn't required:
-      if( $current_type eq 'Undef' && ! $props->{required} )
+      if( $current_type eq 'Undef' )
       {
-        $is_ok = 1;
-        last ISA;
+        if( (! $props->{required}) || ( ! defined $original_value ) )
+        {
+          $is_ok = 1;
+          last ISA;
+        }# end if()
       }# end if()
-
+      
       # Verify that the value matches the entire chain of dependencies:
-      if( $current_type->isa( $wanted_type ) || $current_type eq $wanted_type )
+      if( $wanted_type eq 'Any' || $current_type->isa( $wanted_type ) )
       {
         if( my $ref = $wanted_type->can('where') )
         {
@@ -191,7 +200,7 @@ sub _validate_field
   unless( $is_ok )
   {
     local $_ = $original_value;
-    croak "Invalid value for @{[ref($s)]}.$name: isn't a $props->{isa}: [$original_type] '$_'" . (eval{ ': ' . VSO::Subtype->find($props->{isa})->message($s) }||'');
+    confess "Invalid value for @{[ref($s)]}.$name: isn't a $props->{isa}: [$original_type] '$_'" . (eval{ ': ' . $props->{isa}->message($s) }||'');
   }# end unless()
   
   return $new_value;
@@ -201,6 +210,14 @@ sub _validate_field
 sub extends(@)
 {
   my $class = caller;
+  
+  _extend_class($class => @_);
+}# end extends()
+
+
+sub _extend_class
+{
+  my $class = shift;
   
   no strict 'refs';
   my $meta = $class->meta();
@@ -215,7 +232,7 @@ sub extends(@)
       $meta->{triggers}->{$_} = $parent_meta->{triggers}->{$_}
     } keys %{ $parent_meta->{triggers} };
   } @_;
-}# end extends()
+}# end _extend_class()
 
 
 sub before($&)
@@ -225,7 +242,7 @@ sub before($&)
   my $meta = $class->meta;
   
   # Sanity:
-  croak "You must define property $class.$name before adding triggers to it"
+  confess "You must define property $class.$name before adding triggers to it"
     unless exists($meta->{fields}->{$name}) || $class->can($name);
   
   if( exists($meta->{fields}->{$name}) )
@@ -253,7 +270,7 @@ sub after($&)
   my $meta = $class->meta;
   
   # Sanity:
-  croak "You must define property $class.$name before adding triggers to it"
+  confess "You must define property $class.$name before adding triggers to it"
     unless exists($meta->{fields}->{$name}) || $class->can($name);
   
   if( exists($meta->{fields}->{$name}) )
@@ -341,7 +358,7 @@ sub has($;@)
     
     if( $props->{is} eq 'ro' )
     {
-      croak "Cannot change readonly property '$name'";
+      confess "Cannot change readonly property '$name'";
     }
     elsif( $props->{is} eq 'rw' )
     {
@@ -392,12 +409,16 @@ sub _add_collection_subtype
       $reftype eq 'ArrayRef' ?
         sub {
           my $vals = $_;
-          ! grep {my $itemtype = _discover_type($_); ! ( $itemtype->isa($valtype) ) } @$vals
+          # Handle an empty value:
+          return 1 unless @$vals;
+          ! grep {! _discover_type($_)->isa($valtype) } @$vals
         }
         :
         sub {
           my $vals = [ values %$_ ];
-          ! grep {my $itemtype = _discover_type($_); ! ( $itemtype->isa($valtype) ) } @$vals
+          # Handle an empty value:
+          return 1 unless @$vals;
+          ! grep {! _discover_type($_)->isa($valtype) } @$vals
         },
     'message' => sub { "Must be a valid '$type'" },
   );
@@ -450,7 +471,7 @@ sub load_class
   (my $file = "$class.pm") =~ s|::|/|g;
   no strict 'refs';
   eval { require $file unless defined(@{"$class\::ISA"}) || $INC{$file}; 1 }
-    or die $@;
+    or die "Can't require $file: $@";
   $INC{$file} ||= $file;
   $class->import(@_);
 }# end load_class()
@@ -742,14 +763,14 @@ Coercions and Subtypes:
   use VSO;
 
   subtype 'Number::Odd'
-    => as 'Int'
-    => where { $_ % 2 }
-    => message { "$_ is not an odd number: %=:" . ($_ % 2) };
+    => as       'Int'
+    => where    { $_ % 2 }
+    => message  { "$_ is not an odd number: %=:" . ($_ % 2) };
 
   subtype 'Number::Even'
-    => as 'Int'
-    => where { (! $_) || ( $_ % 2 == 0 ) }
-    => message { "$_ is not an even number" };
+    => as       'Int'
+    => where    { (! $_) || ( $_ % 2 == 0 ) }
+    => message  { "$_ is not an even number" };
 
   coerce 'Number::Odd'
     => from 'Int'
@@ -757,7 +778,7 @@ Coercions and Subtypes:
 
   coerce 'Number::Even'
     => from 'Int'
-    => via { $_ % 2 ? $_ + 1 : $_ };
+    => via  { $_ % 2 ? $_ + 1 : $_ };
 
   has 'favorite_number' => (
     is        => 'ro',
@@ -770,6 +791,18 @@ Coercions and Subtypes:
 
   my $ken = Ken->new( favorite_number => 3 ); # Works
   my $ken = Ken->new( favorite_number => 6 ); # Works, because of coercion.
+
+Compile-time Extension Syntax new in v0.024:
+
+  package Root::Foo;
+  use VSO;
+  has ...;
+  
+  package Subclass::Foo;
+  use VSO extends => 'Foo::Class'; # inheritance during compile-time, not runtime.
+  
+  package Subclass::Bar;
+  use VSO extends => [qw( Foo::Class Bar::Class )]; # extend many at once.
 
 
 =head1 DESCRIPTION
@@ -787,7 +820,7 @@ VSO offers the following type system:
     Item
         Bool
         Undef
-        Maybe[`a]*
+        Maybe[`a]
         Defined
             Value
                 Str
@@ -804,21 +837,17 @@ VSO offers the following type system:
                     FileHandle
                 Object
 
-Differences from the Moose type system include:
+The key differences are that everything is derived from C<Any> and there are no roles.
 
-=over 4
+VSO does not currently support roles.  I<(This may change soon.)>
 
-=item Maybe[`a] (Different)
+=head2 "Another" Moose?
 
-VSO converts C<Maybe[Foo]> to C<Undef|Foo> and converts C<Maybe[HashRef[Foo]]> to C<Undef|HashRef[Foo]>.
+Yes, but not exactly.  VSO is B<not> intended as a drop-in replacement
+for Moose, Mouse, Moo or Mo.  They are all doing a fantastic job and you should use them.
 
-=item RoleName (Missing)
-
-VSO does not currently support 'roles'.
-
-I<(This may change)>.
-
-=back
+We've got a ways to go before version 1.000 is released, so don't get too excited
+if the documentation isn't quite finished or it's not clear why VSO was made.
 
 =head1 AUTHOR
 

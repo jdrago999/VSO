@@ -1,9 +1,25 @@
 
 Changelog for VSO
 
+2012-02-22      v0.024
+  - Changed 'use VSO asa => "Foo::Class"' to 'use VSO extends => "Foo::Class"'
+  - Documented the compile-time version of multiple-inheritance also: 'use VSO => [qw( Foo Bar )]'
+  - Updated POD to explain just a tiny bit what's going on here.
+
+2012-02-19      v0.023
+  - Added special import arg 'use VSO asa => "Foo::Class"' and 'use VSO asa => [qw(Foo::Class Bar::Class)]'
+  - Classes that use VSO with the special 'asa' arg will inherit from the classes
+    listed at *COMPILE TIME*.
+  - 'asa' works the same way as 'extends', but instead of during runtime, it happens
+    during compilation.
+
+2012-01-04      v0.022
+  - Maybe[Foo] works as expected (now).
+
 2011-12-21      v0.021
-  - Maybe[Foo] works.  Becomes Undef|Foo instead.
+  - Maybe[Foo] works.  Becomes Undef|Foo internally.
   - Various minor internal fixes and tweaks around type-checking and validation.
+  - Slight performance boost of about 10%.
 
 2011-12-20      v0.020
   - Handling of (required => 0) works properly now.
