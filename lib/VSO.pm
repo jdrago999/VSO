@@ -655,6 +655,7 @@ subtype 'Any' =>
 
 1;# return true:
 
+__END__
 
 
 =pod
