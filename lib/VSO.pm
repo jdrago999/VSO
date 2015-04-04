@@ -470,7 +470,7 @@ sub load_class
   
   (my $file = "$class.pm") =~ s|::|/|g;
   no strict 'refs';
-  eval { require $file unless defined(@{"$class\::ISA"}) || $INC{$file}; 1 }
+  eval { require $file unless @{"$class\::ISA"} || $INC{$file}; 1 }
     or die "Can't require $file: $@";
   $INC{$file} ||= $file;
   $class->import(@_);
